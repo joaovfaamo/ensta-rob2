@@ -1,6 +1,6 @@
 """ A set of robotics control functions """
 import random  
-from turtle import delay
+from turtle import delay, speed
 import numpy as np
 
 
@@ -97,16 +97,51 @@ def reactive_obst_avoid(lidar):
 def potential_field_control(lidar, current_pose, goal_pose):
     """
     Control using potential field for goal reaching and obstacle avoidance
-    lidar : placebot object with lidar data
-    current_pose : [x, y, theta] nparray, current pose in odom or world frame
-    goal_pose : [x, y, theta] nparray, target pose in odom or world frame
-    Notes: As lidar and odom are local only data, goal and gradient will be defined either in
-    robot (x,y) frame (centered on robot, x forward, y on left) or in odom (centered / aligned
-    on initial pose, x forward, y on left)
+    ...
     """
-    # TODO for TP2
+    
+    kgoal = 1.0  # Gain for the attractive potential
+    
+    qgoal = np.array(goal_pose[:2])  # Eliminate the orientation component, only (x, y)
+    qcurrent = np.array(current_pose[:2])  # Current position (x, y)
+    distance = np.linalg.norm(qcurrent - qgoal) #Calculate the euclidean distance between the current position and the goal position
 
-    command = {"forward": 0,
-               "rotation": 0}
+    # Inicializa variáveis
+    speed = 0
+    rotation_speed = 0
+
+    if distance > 3:
+        gradient_attractive = (kgoal * (qgoal - qcurrent))/distance
+        norme = np.linalg.norm(gradient_attractive)
+        direction = gradient_attractive / norme# Gradient of the attractive potential
+        
+    else:
+        gradient_attractive = np.array([0.0, 0.0])
+        speed = 0
+        rotation_speed = 0
+        return {"forward": speed, "rotation": rotation_speed}
+    
+    #VERIFICAR ESSA PARTE 
+    
+    # print(f"Gradient Attractif: {gradient_attractive}, Norme: {norme}, Direction: {direction}")
+    # Calcula o ângulo do vetor FORÇA no mundo (-pi a pi)
+    angle_force = np.arctan2(direction[1], direction[0])  
+    # Descobre para onde o ROBÔ está olhando no mundo (o Theta)
+    robot_theta = current_pose[2]
+    # Calcula A DIFERENÇA entre onde eu quero ir e onde estou olhando
+    angle_diff = angle_force - robot_theta
+    # Normaliza o ângulo para ficar sempre entre -pi e pi
+    # (Isso garante que o robô faça o giro pelo caminho mais curto)
+    angle_diff = (angle_diff + np.pi) % (2 * np.pi) - np.pi
+    speed = 0.5 * kgoal # Controle fixo de velocidade
+    rotation_speed = 0.5 * angle_diff  # Gira proporcionalmente ao ERRO de ângulo
+    # SATURAÇÃO MÁXIMA/MÍNIMA para o motor do simulador [-1.0, 1.0]
+    speed = float(np.clip(speed, -1.0, 1.0))
+    rotation_speed = float(np.clip(rotation_speed, -1.0, 1.0))
+    print(f"Alvo(Mundo): {angle_force:.2f}, Robô: {robot_theta:.2f}, Erro(Giro): {angle_diff:.2f}, distance: {distance:.2f}")
+    
+    
+    command = {"forward": speed,
+               "rotation": rotation_speed}
 
     return command
