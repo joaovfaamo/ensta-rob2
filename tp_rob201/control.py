@@ -1,6 +1,6 @@
 """ A set of robotics control functions """
-
-import random
+import random  
+from turtle import delay
 import numpy as np
 
 
@@ -12,9 +12,45 @@ def reactive_obst_avoid(lidar):
     # TODO for TP1
 
     laser_dist = lidar.get_sensor_values()
-    speed = 0.0
-    rotation_speed = 0.0
+    #print(lidar.get_sensor_values().min())
 
+    """
+    # First way i implemented obstacle avoidance: if any of the laser distances is less than 10, we stop and rotate randomly
+    if (laser_dist.min() < 12):  #Since laser_dist is an array, we check if any of the values is less than 10
+        speed = 0
+        rotation_speed = random.uniform(0.5, 1.0) * random.choice([-1, 1])
+    else:
+        speed = 0.3  # Reduzindo a velocidade para uma reação mais suave
+        rotation_speed = 0
+    """
+
+# Second way: See only the front Secteur
+
+    laser_dist = lidar.get_sensor_values()
+
+    # --- Nova Abordagem: Frente do robô está no meio do array ---
+    num_rays = len(laser_dist) #mesure the number of rays in the lidar
+    mid_point = num_rays // 2 #the middle index of the lidar rays, assuming the front is in the middle of the array (180 DEGRES)
+    num_rays_side = 50 # (180 - 50) = 130 e (180 + 50) = 230, so we will look at the rays from index 130 to 230, which correspond to the front sector of the robot
+    
+    start_index = max(0, mid_point - num_rays_side) #130
+    end_index = min(num_rays, mid_point + num_rays_side) #230
+    front_sector = laser_dist[start_index:end_index] #Copy the desired elements of the lidar vector to the new vector (front sect)
+
+    min_front_dist = front_sector.min() #Find the minimum distance in the front sector
+    print(f"Distância Mínima Frontal: {min_front_dist:.2f}")
+
+    SAFE_DISTANCE = 30
+
+    if min_front_dist < SAFE_DISTANCE:
+        speed = 0
+        rotation_speed = random.uniform(0.7, 1.0) * random.choice([-1, 1])
+    else:
+        
+        speed = 0.3
+        rotation_speed = 0
+
+   
     command = {"forward": speed,
                "rotation": rotation_speed}
 
