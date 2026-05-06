@@ -100,13 +100,13 @@ def potential_field_control(lidar, current_pose, goal_pose):
     ...
     """
     #Implementacao Gradiente Atrativo
-    kgoal = 0.5  # Gain for the attractive potential
+    kgoal = 0.8  # Gain for the attractive potential
     qgoal = np.array(goal_pose[:2])  # Eliminate the orientation component, only (x, y)
     qcurrent = np.array(current_pose[:2])  # Current position (x, y)
     distance = np.linalg.norm(qcurrent - qgoal) #Calculate the euclidean distance between the current position and the goal position
 
     #Implementacao Gradiente Repulsivo 
-    kobstacle = 0.5  
+    kobstacle = 100
     safe_distance = 20
     #Como a ideia é ter varias forças de repulsão, uma para cada obstaculo, precisamos calcular o gradiente de cada um deles e somar as forças de repulsão
     laser_dist = lidar.get_sensor_values()
@@ -166,13 +166,21 @@ def potential_field_control(lidar, current_pose, goal_pose):
     angle_diff = angle_force - robot_theta
     angle_diff = (angle_diff + np.pi) % (2 * np.pi) - np.pi
 
-    speed = 0.4 * kgoal 
+    # Calcula a FORÇA TOTAL (Norma do vetor final)
+    force_magnitude = np.linalg.norm(final_direction)
+
+    speed_base = 0.4 * force_magnitude
     rotation_speed = 0.5 * angle_diff  # Gira proporcionalmente ao ERRO de ângulo
+    
+    # Reduz a velocidade se o erro de angulo for muito grande (pra n ir reto na parede enqnto vira)
+    if abs(angle_diff) > np.pi / 4: # Se o erro for maior que 45 graus
+        speed_base = 0.1 # Anda bem devagarzinho
+    
     # SATURAÇÃO MÁXIMA/MÍNIMA para o motor do simulador [-1.0, 1.0]
-    speed = float(np.clip(speed, -1.0, 1.0))
+    speed = float(np.clip(speed_base, 0.0, 1.0)) # Nao deixa dar re (0.0 minimo) e vai no max 1.0
     rotation_speed = float(np.clip(rotation_speed, -1.0, 1.0))
     print(f"Alvo(Mundo): {angle_force:.2f}, Robô: {robot_theta:.2f}, Erro(Giro): {angle_diff:.2f}, distance: {distance:.2f}")
-    
+
 
     #Conjuntos de Parametros Funcionais:
     #kgoal = 1.0, speed = 0.3, rotation_speed = 0.5 
