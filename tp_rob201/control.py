@@ -99,27 +99,53 @@ def potential_field_control(lidar, current_pose, goal_pose):
     Control using potential field for goal reaching and obstacle avoidance
     ...
     """
-    
+    #Implementacao Gradiente Atrativo
     kgoal = 0.5  # Gain for the attractive potential
-    
     qgoal = np.array(goal_pose[:2])  # Eliminate the orientation component, only (x, y)
     qcurrent = np.array(current_pose[:2])  # Current position (x, y)
     distance = np.linalg.norm(qcurrent - qgoal) #Calculate the euclidean distance between the current position and the goal position
 
+    #Implementacao Gradiente Repulsivo 
+    kobstacle = 0.5  
+    safe_distance = 20
+    #Como a ideia é ter varias forças de repulsão, uma para cada obstaculo, precisamos calcular o gradiente de cada um deles e somar as forças de repulsão
+    laser_dist = lidar.get_sensor_values()
+    laser_angles = np.linspace(-np.pi, np.pi, len(laser_dist))  # Gera um vetor de angulos correspondente a cada leitura do lidar 
+    #Quero somar laser_angles com current_pose[2] para obter os angulos dos obstaculos no mundo
+    #Preciso definir os objetos com coordenas globais (mundo)
+    # Angulo global = Angulo carro + Angulo Lidar
+    # Xglobal = Xcarro + distancia_lidar * cos(angulo_global)
+    # Yglobal = Ycarro + distancia_lidar * sin(angulo_global)
+
+    obs_angles_world = laser_angles + current_pose[2]  # Angles of obstacles in the world frame
+    obs_x = current_pose[0] + laser_dist * np.cos(obs_angles_world)  # X coordinates of obstacles in the world frame
+    obs_y = current_pose[1] + laser_dist * np.sin(obs_angles_world)  # Y coordinates of obstacles in the world frame
+    qobs = np.vstack((obs_x, obs_y)).T  # Combine obs_x and obs_y into a single array of shape (num_obstacles, 2)
+
+    #Parte de Correcao do Angulo Final (Para ajudar o angulo na posicao de parada)
     finalstop_goal_angle =  goal_pose[2] 
     finalstop_current_angle = current_pose[2]
-    finalstop_angle_diff = finalstop_goal_angle - finalstop_current_angle
+    finalstop_angle_diff = finalstop_goal_angle - finalstop_current_angle #Angulo de Parada
     finalstop_angle_diff = (finalstop_angle_diff + np.pi) % (2 * np.pi) - np.pi # Normalize the angle difference to the range [-pi, pi]
 
 
     speed = 0
     rotation_speed = 0
 
+    #Se a distancia for maior que 2, o robo calcula os gradientes, se for menor (ele para)
     if distance > 2:
         gradient_attractive = (kgoal * (qgoal - qcurrent))/distance
-        norme = np.linalg.norm(gradient_attractive)
-        direction = gradient_attractive / norme# Gradient of the attractive potential
-        
+        norme_attractive = np.linalg.norm(gradient_attractive) #calcula norma do vetor
+        direction_atractive = gradient_attractive / norme_attractive# Gradient of the attractive potential
+        #Gradiente de repulsão para cada obstáculo
+        direction_repulsive = np.array([0.0, 0.0])
+        for obs in qobs:
+            obs_distance = np.linalg.norm(qcurrent - obs) #Calculate the distance from the robot to the obstacle
+            if obs_distance < safe_distance: #If the obstacle is within the safe distance, we calculate the repulsive force
+                gradient_repulsive = (kobstacle/ (obs_distance**3)) * (1/obs_distance - 1/safe_distance) * (obs - qcurrent) #Calculate the repulsive force using the formula for the gradient of the repulsive potential
+                norme_repulsive = np.linalg.norm(gradient_repulsive)
+                direction_repulsive += gradient_repulsive/norme_repulsive #We add the repulsive force to the attractive force to get the final direction of movement
+        final_direction = direction_atractive - direction_repulsive  #Como o veto repulsivo aponta do carro para o obstaculo, tivemos que subtrair
     else:
         if abs(finalstop_angle_diff) > 0.1: # If the robot is close to the goal but not well oriented, we rotate in place to correct the orientation
             speed = 0
@@ -131,10 +157,9 @@ def potential_field_control(lidar, current_pose, goal_pose):
             rotation_speed = 0
         return {"forward": speed, "rotation": rotation_speed}
     
-    #VERIFICAR ESSA PARTE 
     
     # Calcula o ângulo do vetor FORÇA no mundo (-pi a pi)
-    angle_force = np.arctan2(direction[1], direction[0])  #(Y dps X)
+    angle_force = np.arctan2(final_direction[1], final_direction[0])  #(Y dps X)
     robot_theta = current_pose[2] # ORIEtacao atuald o robo
 
     # Calcula A DIFERENÇA entre onde eu quero ir e onde estou olhando (Angulo Objetivo)
@@ -152,7 +177,7 @@ def potential_field_control(lidar, current_pose, goal_pose):
     #Conjuntos de Parametros Funcionais:
     #kgoal = 1.0, speed = 0.3, rotation_speed = 0.5 
     #kgoal = 0.5, speed = 0.2, rotation_speed = 0.3
-    
+
     command = {"forward": speed,
                "rotation": rotation_speed}
 
