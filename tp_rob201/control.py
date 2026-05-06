@@ -121,9 +121,10 @@ def potential_field_control(lidar, current_pose, goal_pose):
         direction = gradient_attractive / norme# Gradient of the attractive potential
         
     else:
-        if finalstop_angle_diff > 0.1: # If the robot is close to the goal but not well oriented, we rotate in place to correct the orientation
+        if abs(finalstop_angle_diff) > 0.1: # If the robot is close to the goal but not well oriented, we rotate in place to correct the orientation
             speed = 0
             rotation_speed = 0.1
+            print(f"Final Stop: Alvo(Mundo): {finalstop_goal_angle:.2f}, Robô: {finalstop_current_angle:.2f}, Erro(Giro): {finalstop_angle_diff:.2f}")
         else:
             gradient_attractive = np.array([0.0, 0.0])
             speed = 0
