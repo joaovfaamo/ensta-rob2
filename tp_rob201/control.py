@@ -100,46 +100,57 @@ def potential_field_control(lidar, current_pose, goal_pose):
     ...
     """
     
-    kgoal = 1.0  # Gain for the attractive potential
+    kgoal = 0.5  # Gain for the attractive potential
     
     qgoal = np.array(goal_pose[:2])  # Eliminate the orientation component, only (x, y)
     qcurrent = np.array(current_pose[:2])  # Current position (x, y)
     distance = np.linalg.norm(qcurrent - qgoal) #Calculate the euclidean distance between the current position and the goal position
 
-    # Inicializa variáveis
+    finalstop_goal_angle =  goal_pose[2] 
+    finalstop_current_angle = current_pose[2]
+    finalstop_angle_diff = finalstop_goal_angle - finalstop_current_angle
+    finalstop_angle_diff = (finalstop_angle_diff + np.pi) % (2 * np.pi) - np.pi # Normalize the angle difference to the range [-pi, pi]
+
+
     speed = 0
     rotation_speed = 0
 
-    if distance > 3:
+    if distance > 2:
         gradient_attractive = (kgoal * (qgoal - qcurrent))/distance
         norme = np.linalg.norm(gradient_attractive)
         direction = gradient_attractive / norme# Gradient of the attractive potential
         
     else:
-        gradient_attractive = np.array([0.0, 0.0])
-        speed = 0
-        rotation_speed = 0
+        if finalstop_angle_diff > 0.1: # If the robot is close to the goal but not well oriented, we rotate in place to correct the orientation
+            speed = 0
+            rotation_speed = 0.1
+        else:
+            gradient_attractive = np.array([0.0, 0.0])
+            speed = 0
+            rotation_speed = 0
         return {"forward": speed, "rotation": rotation_speed}
     
     #VERIFICAR ESSA PARTE 
     
-    # print(f"Gradient Attractif: {gradient_attractive}, Norme: {norme}, Direction: {direction}")
     # Calcula o ângulo do vetor FORÇA no mundo (-pi a pi)
-    angle_force = np.arctan2(direction[1], direction[0])  
-    # Descobre para onde o ROBÔ está olhando no mundo (o Theta)
-    robot_theta = current_pose[2]
-    # Calcula A DIFERENÇA entre onde eu quero ir e onde estou olhando
+    angle_force = np.arctan2(direction[1], direction[0])  #(Y dps X)
+    robot_theta = current_pose[2] # ORIEtacao atuald o robo
+
+    # Calcula A DIFERENÇA entre onde eu quero ir e onde estou olhando (Angulo Objetivo)
     angle_diff = angle_force - robot_theta
-    # Normaliza o ângulo para ficar sempre entre -pi e pi
-    # (Isso garante que o robô faça o giro pelo caminho mais curto)
     angle_diff = (angle_diff + np.pi) % (2 * np.pi) - np.pi
-    speed = 0.5 * kgoal # Controle fixo de velocidade
+
+    speed = 0.4 * kgoal 
     rotation_speed = 0.5 * angle_diff  # Gira proporcionalmente ao ERRO de ângulo
     # SATURAÇÃO MÁXIMA/MÍNIMA para o motor do simulador [-1.0, 1.0]
     speed = float(np.clip(speed, -1.0, 1.0))
     rotation_speed = float(np.clip(rotation_speed, -1.0, 1.0))
     print(f"Alvo(Mundo): {angle_force:.2f}, Robô: {robot_theta:.2f}, Erro(Giro): {angle_diff:.2f}, distance: {distance:.2f}")
     
+
+    #Conjuntos de Parametros Funcionais:
+    #kgoal = 1.0, speed = 0.3, rotation_speed = 0.5 
+    #kgoal = 0.5, speed = 0.2, rotation_speed = 0.3
     
     command = {"forward": speed,
                "rotation": rotation_speed}
