@@ -50,7 +50,7 @@ class MyRobotSlam(RobotAbstract):
         """
         Main control function executed at each time step
         """
-        return self.control_tp2()
+        return self.control_so_para_teste()
 
     def control_tp1(self):
         """
@@ -74,4 +74,14 @@ class MyRobotSlam(RobotAbstract):
         # Compute new command speed to perform obstacle avoidance
         command = potential_field_control(self.lidar(), pose, goal)
 
+        return command
+    
+    def control_so_para_teste(self):
+        """
+        Criei esta funcao para ter um controle que nao faz nada, para poder testar o SLAM e o mapeamento sem o robot se mover, e assim verificar se o mapa esta sendo atualizado corretamente.
+        Posso excluir ela depois
+        """
+
+        command = {"forward": 0,
+                   "rotation": 0}
         return command

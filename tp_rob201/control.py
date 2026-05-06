@@ -181,12 +181,11 @@ def potential_field_control(lidar, current_pose, goal_pose):
     rotation_speed = float(np.clip(rotation_speed, -1.0, 1.0))
     print(f"Alvo(Mundo): {angle_force:.2f}, Robô: {robot_theta:.2f}, Erro(Giro): {angle_diff:.2f}, distance: {distance:.2f}")
 
-
-    #Conjuntos de Parametros Funcionais:
-    #kgoal = 1.0, speed = 0.3, rotation_speed = 0.5 
-    #kgoal = 0.5, speed = 0.2, rotation_speed = 0.3
+    # Para modificar o desempenho do sistema, só devemos modificar os Ks (kgoal e kobstacle)
 
     command = {"forward": speed,
                "rotation": rotation_speed}
+    
+    #Parte das Extensoes Foram Feitas (Que é no caso a utilizacao de todas as forcas de repulsao a partir do lidar)
 
     return command
