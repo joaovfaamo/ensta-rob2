@@ -75,12 +75,34 @@ class MyRobotSlam(RobotAbstract):
         command = potential_field_control(self.lidar(), pose, goal)
 
         return command
-    
+
     def control_so_para_teste(self):
         """
         Criei esta funcao para ter um controle que nao faz nada, para poder testar o SLAM e o mapeamento sem o robot se mover, e assim verificar se o mapa esta sendo atualizado corretamente.
         Posso excluir ela depois
         """
+        # 1. Mise à jour de la carte
+        self.tiny_slam.update_map(self.lidar(), self.odometer_values())
+
+        # 2. Incrementa o contador
+        self.counter += 1
+
+        # 3. Affichage (1 vez a cada 10)
+        if self.counter % 10 == 0:
+            # Salva o mapa original
+            original_map = np.copy(self.occupancy_grid.occupancy_map)
+            
+            # Aplica o seuillage para visualização (4 para parede, -4 para livre)
+            clean_map = np.zeros_like(original_map)
+            clean_map[original_map > 2] = 4
+            clean_map[original_map < -2] = -4
+            
+            # Coloca o mapa limpo na grid temporariamente e exibe
+            self.occupancy_grid.occupancy_map = clean_map
+            self.occupancy_grid.display_cv(self.odometer_values())
+            
+            # Restaura o mapa original de probabilidades
+            self.occupancy_grid.occupancy_map = original_map
 
         command = {"forward": 0,
                    "rotation": 0}

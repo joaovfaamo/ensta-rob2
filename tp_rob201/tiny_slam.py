@@ -59,10 +59,7 @@ class TinySlam:
         """
         # TODO for TP3
         
-        self.__init__(OccupancyGrid(self.grid.x_max_map, self.grid.y_max_map, self.grid.resolution)) #Reinitialise the map to be empty (with all values at 0) at each iteration, so we can add the new points of the lidar at each iteration and have a more accurate map of the environment
-    
-
-
+        #Implementacao do Upload das Probs das Celulas do Mapa
         #Pega a posicao atual do robo
         current_pose = pose
         laser_dist = lidar.get_sensor_values()
@@ -70,21 +67,28 @@ class TinySlam:
         obs_angles_world = laser_angles + current_pose[2]  # Angles of obstacles in the world frame
         obs_x = current_pose[0] + laser_dist * np.cos(obs_angles_world)  # X coordinates of obstacles in the world frame
         obs_y = current_pose[1] + laser_dist * np.sin(obs_angles_world)  # Y coordinates of obstacles in the world frame
-        qobs = np.vstack((obs_x, obs_y)).T  # Combine obs_x and obs_y into a single array of shape (num_obstacles, 2)
-
         
+        #A logica aqui é deixar um raio de incerteza ao redor do ponto de impacto do laser (evita instabilidade)
+        free_dist = laser_dist - 0.2  # Diminuí 20cm do limite do impacto (Ajuste o valor aqui dependendo da estabilidade) 
+        free_dist = np.maximum(free_dist, 0) #Mantem os valores em positivos
+
+         # Coordenadas Seguras para marcar como livres (um pouco antes do impacto)
+        free_x = current_pose[0] + free_dist * np.cos(obs_angles_world)
+        free_y = current_pose[1] + free_dist * np.sin(obs_angles_world)
+
+        #Adiciona 1 as celulas dos obstaculos e -1 as celulas em linha reta entre os dois e a posicao do robo
         self.grid.add_map_points(obs_x, obs_y, val=1) #Adiciona os pontos de obstaculos no mapa (com valor 1, ou seja, mais provavel de ser ocupado) 
-        self.grid.add_map_points(current_pose[0], current_pose[1], val=-1) #Adiciona a posicao do robo no mapa (com valor -1, ou seja, mais provavel de ser livre)
-        self.add_value_along_line(current_pose[0], current_pose[1], obs_x, obs_y, val=-1) #Adiciona os pontos entre a posicao do robo e os pontos de obstaculos no mapa (com valor -1, ou seja, mais provavel de ser livre)
-        self.conv_world_to_map(obs_x, obs_y)
-
-    
-
-
-
-
-
+        self.grid.add_map_points(np.array([current_pose[0]]), np.array([current_pose[1]]), val=-1) #Adiciona a posicao do robo no mapa (com valor -1, ou seja, mais provavel de ser livre)
         
+       #Adciona -1 para os pontos entre o robo e a posicao segura de impacto
+       # Como o metodo aceita só valores unicos, usa o for para adicionar os pontos 
+        for i in range(len(free_x)):
+             self.grid.add_value_along_line(current_pose[0], current_pose[1], free_x[i], free_y[i], val=-0.5)
+
+        self.grid.occupancy_map = np.clip(self.grid.occupancy_map, -5, 5)
+
+
+
     def compute(self):
         """ Useless function, just for the exercise on using the profiler """
        
