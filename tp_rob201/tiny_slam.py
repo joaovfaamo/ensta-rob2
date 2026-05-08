@@ -27,17 +27,26 @@ class TinySlam:
         return score
 
     def get_corrected_pose(self, odom_pose, odom_pose_ref=None):
-        """
-        Compute corrected pose in map frame from raw odom pose + odom frame pose,
-        either given as second param or using the ref from the object
-        odom : raw odometry position
-        odom_pose_ref : optional, origin of the odom frame if given,
-                        use self.odom_pose_ref if not given
-        """
-        # TODO for TP4
-        corrected_pose = odom_pose
-
+        if odom_pose_ref is None:
+            odom_pose_ref = self.odom_pose_ref
+            
+        # Extrair parâmetros da referência
+        ref_x, ref_y, ref_t = odom_pose_ref
+        
+        # Rotacionar a odometria "mente" usando o ângulo corrigido da referência
+        # e depois aplicar a translação
+        corr_x = ref_x + odom_pose[0] * np.cos(ref_t) - odom_pose[1] * np.sin(ref_t)
+        corr_y = ref_y + odom_pose[0] * np.sin(ref_t) + odom_pose[1] * np.cos(ref_t)
+        
+        # O ângulo final (theta) é só a soma básica
+        corr_t = ref_t + odom_pose[2]
+        
+        # É importante manter o theta restrito entre -pi e pi se o código ficar girando eternamente
+        corr_t = (corr_t + np.pi) % (2 * np.pi) - np.pi
+        
+        corrected_pose = np.array([corr_x, corr_y, corr_t])
         return corrected_pose
+
 
     def localise(self, lidar, raw_odom_pose):
         """
@@ -84,6 +93,8 @@ class TinySlam:
         for i in range(len(free_x)):
              self.grid.add_value_along_line(current_pose[0], current_pose[1], free_x[i], free_y[i], val=-0.2)
 
+        #Normaliza os valores do grid para evitar que fiquem muito extremos
+        #A propria funcao display ja cria uma varia de cores baseada nesse clip (5 vermelho, e -5 azul escuro, 0 cinza)
         self.grid.occupancy_map = np.clip(self.grid.occupancy_map, -5, 5)
         
  
