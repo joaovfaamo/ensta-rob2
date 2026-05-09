@@ -22,10 +22,24 @@ class TinySlam:
         """
         # TODO for TP4
 
+
+        current_pose = pose
+        laser_dist = lidar.get_sensor_values()
+        laser_dist_filtered = np.where(laser_dist < lidar.max_range, laser_dist, 0)  # Filtra os valores de distância para evitar pontos muito distantes
+        laser_angles = np.linspace(-np.pi, np.pi, len(laser_dist_filtered)) 
+        obs_angles_world = laser_angles + current_pose[2]  # Angles of obstacles in the world frame
+        obs_x = current_pose[0] + laser_dist * np.cos(obs_angles_world)  # X coordinates of obstacles in the world frame
+        obs_y = current_pose[1] + laser_dist * np.sin(obs_angles_world)
+
+
+
+
         score = 0
 
         return score
 
+    #Get the corrected position of the robot in world coordinates
+    #REVISE
     def get_corrected_pose(self, odom_pose, odom_pose_ref=None):
         if odom_pose_ref is None:
             odom_pose_ref = self.odom_pose_ref
