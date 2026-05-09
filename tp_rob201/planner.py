@@ -32,6 +32,16 @@ class Planner:
         """
         neighbor_list = []
         # TODO for TP5: iterate through neighbors and add free ones to neighbor_list
+
+    
+        current_cell_i, current_cell_j = current_cell
+        for i in range(current_cell_i - 1, current_cell_i + 2):
+            for j in range(current_cell_j - 1, current_cell_j + 2):
+                if (i, j) != current_cell:  # Exclude the current cell itself
+                    if 0 <= i < self.grid.x_max_map and 0 <= j < self.grid.y_max_map:  # Check bounds
+                        if self.map_walls[i, j] == 0:  # Check if the cell is free (not a wall)
+                            neighbor_list.append((i, j))
+
         return neighbor_list
 
 
