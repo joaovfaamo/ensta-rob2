@@ -90,11 +90,12 @@ class TinySlam:
         best_score = self._score(lidar, corrected_pose)
 
         # 2. Pesquisa Aleatória para encontrar melhor referência
-        N_max = 50  # Número de tentativas sem melhoria (Tirages sans amélioration)
+        N_max = 300  # Aumentado drasticamente para aguentar movimentos do teclado
         no_improve_count = 0
         
         # Desvios padrão para [x, y, theta] da matriz de ruído
-        sigma = np.array([0.05, 0.05, 0.02]) 
+        # Sigma muito mais amplo para perdoar giros e saltos de odometria altos do input manual
+        sigma = np.array([0.1, 0.1, 0.08])
 
         while no_improve_count < N_max:
             # 3. Adicionar ruído na POSIÇÃO DE REFERÊNCIA, não na odometria bruta

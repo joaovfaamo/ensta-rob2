@@ -71,8 +71,7 @@ class MyRobotSlam(RobotAbstract):
         if self.counter % 10 == 0:
             # Exibe o mapa original de probabilidades diretemente, permitindo ver o degrade de log-odds
             # sem forcar hard limits (seuillage visual)
-            self.occupancy_grid.display_cv(self.odometer_values())
-
+            self.occupancy_grid.display_cv(self.corrected_pose)
 
         return self.control_tp2()
 
@@ -93,7 +92,7 @@ class MyRobotSlam(RobotAbstract):
         Main control function with full SLAM, random exploration and path planning
         """
         pose = self.odometer_values()
-        goal = [-100, -400, 3.14/2 ]
+        goal = [-200, -400, 3.14/2 ]
 
         # Compute new command speed to perform obstacle avoidance
         command = potential_field_control(self.lidar(), pose, goal)
