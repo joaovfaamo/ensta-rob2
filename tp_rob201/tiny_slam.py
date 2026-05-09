@@ -20,21 +20,35 @@ class TinySlam:
         lidar : placebot object with lidar data
         pose : [x, y, theta] nparray, position of the robot to evaluate, in world coordinates
         """
-        # TODO for TP4
-
-
-        current_pose = pose
+        # 1. Recuperar distâncias e seus respectivos ângulos
         laser_dist = lidar.get_sensor_values()
-        laser_dist_filtered = np.where(laser_dist < lidar.max_range, laser_dist, 0)  # Filtra os valores de distância para evitar pontos muito distantes
-        laser_angles = np.linspace(-np.pi, np.pi, len(laser_dist_filtered)) 
-        obs_angles_world = laser_angles + current_pose[2]  # Angles of obstacles in the world frame
-        obs_x = current_pose[0] + laser_dist * np.cos(obs_angles_world)  # X coordinates of obstacles in the world frame
-        obs_y = current_pose[1] + laser_dist * np.sin(obs_angles_world)
-
-
-
-
-        score = 0
+        laser_angles = np.linspace(-np.pi, np.pi, len(laser_dist)) 
+        
+        # 2. Filtrar os pontos com distância máxima (não são detecções de obstáculos em si)
+        valid_mask = laser_dist < lidar.max_range
+        valid_dist = laser_dist[valid_mask] #Mantém apenas as distâncias válidas (menores que o alcance máximo do lidar)
+        valid_angles = laser_angles[valid_mask] #Mantém apenas os ângulos correspondentes às distâncias válidas
+        
+        if len(valid_dist) == 0:
+            return 0
+        
+        # 3. Estimar posições absolutas da detecção no mapa
+        obs_angles_world = valid_angles + pose[2]
+        obs_x = pose[0] + valid_dist * np.cos(obs_angles_world)
+        obs_y = pose[1] + valid_dist * np.sin(obs_angles_world)
+        
+        # 4. Converter posições métricas (x, y) em índices (pixels) do grid
+        map_x, map_y = self.grid.conv_world_to_map(obs_x, obs_y)
+        
+        # 5. Remover lidar-points que acabam caindo fora das bordas da grade de mapeamento
+        inside_map_mask = (map_x >= 0) & (map_x < self.grid.x_max_map) & \
+                          (map_y >= 0) & (map_y < self.grid.y_max_map)
+        
+        valid_map_x = map_x[inside_map_mask]
+        valid_map_y = map_y[inside_map_mask]
+        
+        # 6. Somar (score) a pontuação das células marcadas 
+        score = np.sum(self.grid.occupancy_map[valid_map_x, valid_map_y])
 
         return score
 
@@ -70,9 +84,43 @@ class TinySlam:
         """
         # TODO for TP4
 
-        best_score = 0
+        # 1. Calcular o score inicial usando a posição de referência ATUAL
+        best_odom_ref = self.odom_pose_ref.copy()
+        corrected_pose = self.get_corrected_pose(raw_odom_pose, best_odom_ref)
+        best_score = self._score(lidar, corrected_pose)
+
+        # 2. Pesquisa Aleatória para encontrar melhor referência
+        N_max = 50  # Número de tentativas sem melhoria (Tirages sans amélioration)
+        no_improve_count = 0
+        
+        # Desvios padrão para [x, y, theta] da matriz de ruído
+        sigma = np.array([0.05, 0.05, 0.02]) 
+
+        while no_improve_count < N_max:
+            # 3. Adicionar ruído na POSIÇÃO DE REFERÊNCIA, não na odometria bruta
+            noise = np.random.normal(0, sigma)
+            test_odom_ref = best_odom_ref + noise
+            
+            # Normalizar theta
+            test_odom_ref[2] = (test_odom_ref[2] + np.pi) % (2 * np.pi) - np.pi #Mantém o ângulo entre -pi e pi para evitar problemas de rotação contínua
+
+            # 4. Calcular score com a nova referência testada
+            test_pose = self.get_corrected_pose(raw_odom_pose, test_odom_ref)
+            test_score = self._score(lidar, test_pose)
+
+            # 5. Se for melhor, memorizar o score e atualizar a referência (e resetar o contador)
+            if test_score > best_score:
+                best_score = test_score
+                best_odom_ref = test_odom_ref
+                no_improve_count = 0
+            else:
+                no_improve_count += 1
+
+        # 6. Salvar a melhor referência encontrada do robô no atributo do objeto
+        self.odom_pose_ref = best_odom_ref
 
         return best_score
+
 
     def update_map(self, lidar, pose):
         """

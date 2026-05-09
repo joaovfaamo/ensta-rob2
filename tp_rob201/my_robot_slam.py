@@ -50,9 +50,19 @@ class MyRobotSlam(RobotAbstract):
         """
         Main control function executed at each time step
         """
+        raw_odom = self.odometer_values()
 
-        # 1. Mise à jour de la carte
-        self.tiny_slam.update_map(self.lidar(), self.odometer_values())
+        # 1. Tenta melhorar o "self.odom_pose_ref" (descobrir o erro) e recupera o quão confiável essa medição foi (best_score)
+        best_score = self.tiny_slam.localise(self.lidar(), raw_odom)
+
+        # 2. Constrói a posição absoluta final para onde o Lidar será colado no mapa de probabilidades
+        self.corrected_pose = self.tiny_slam.get_corrected_pose(raw_odom)
+
+        score_threshold = -1# Ou qualquer constante que você otimizou empiricamente assistindo o score
+        
+        if best_score > score_threshold:
+            self.tiny_slam.update_map(self.lidar(), self.corrected_pose)
+                
 
         # 2. Incrementa o contador
         self.counter += 1
