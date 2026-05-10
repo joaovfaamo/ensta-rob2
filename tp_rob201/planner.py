@@ -39,7 +39,7 @@ class Planner:
             for j in range(current_cell_j - 1, current_cell_j + 2):
                 if (i, j) != current_cell:  # Exclude the current cell itself
                     if 0 <= i < self.grid.x_max_map and 0 <= j < self.grid.y_max_map:  # Check bounds
-                        if self.map_walls[i, j] == 0:  # Check if the cell is free (not a wall)
+                        if self.map_walls[i, j] < 1:  # Modificado: Log-odds livre (<0) ou desconhecido (0)
                             neighbor_list.append((i, j))
 
         return neighbor_list
@@ -88,7 +88,7 @@ class Planner:
         # Consideramos como parede o que tiver probabilidade log-odds maior que um limiar (ex: > 0)
         walls_mask = (self.map_walls > 0).astype(np.uint8)
         
-        # Cria um kernel de dilatação (ex: 5x5 pixels de margem de segurança)
+        # Cria um kernel de dilatação maior para afastar a trajetória das quinas e paredes
         kernel = np.ones((5, 5), np.uint8)
         dilated_walls = cv2.dilate(walls_mask, kernel, iterations=1)
         

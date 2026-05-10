@@ -75,17 +75,19 @@ class MyRobotSlam(RobotAbstract):
         if self.counter % 10 == 0:
             # Exibe o mapa original de probabilidades diretemente, permitindo ver o degrade de log-odds
             # sem forcar hard limits (seuillage visual)
-            self.occupancy_grid.display_cv(self.corrected_pose)
+            if self.traj is not None:
+                self.occupancy_grid.display_cv(self.corrected_pose, np.array([0, 0, 0]), self.traj)
+            else:
+                self.occupancy_grid.display_cv(self.corrected_pose)
 
-        return self.control_tp2()
+        return self.control_tp5()
 
+    
     def control_tp1(self):
         """
         Control function for TP1
         Control funtion with minimal random motion
         """
-        self.tiny_slam.compute()
-
         # Compute new command speed to perform obstacle avoidance
         command = reactive_obst_avoid(self.lidar())
         return command
@@ -103,4 +105,48 @@ class MyRobotSlam(RobotAbstract):
 
         return command
 
-  
+    def control_tp5(self):
+        """
+        Implementation of the final planning routine for TP5
+        """
+        exploration_iterations = 200
+
+        if self.counter < exploration_iterations:
+            # Cartographie/exploration
+            return self.control_tp1() # Usa reactive obstacle avoidance para bater perna e mapear
+            
+        elif self.counter == exploration_iterations:
+            # À une itération choisie, calculez le plus court chemin
+            print("Calculando caminho de volta para a origem...")
+            
+            # VOCÊ PODE ALTERAR O DESTINO AQUI: (x, y, theta)
+            destino = np.array([-200, -200, 0.0])
+            self.traj = self.planner.plan(self.corrected_pose, destino)
+            
+            self.target_idx = 0
+            return {"forward": 0.0, "rotation": 0.0} # Para para pensar
+            
+        else:
+            # Pour les itérations suivantes, utilisez un contrôleur local
+            if self.traj is None:
+                return {"forward": 0.0, "rotation": 0.0}
+                
+            # Arrêtez-vous lorsque le robot est revenu au point de départ
+            if self.target_idx >= self.traj.shape[1]:
+                print("🏁 Ponto de partida alcançado!")
+                return {"forward": 0.0, "rotation": 0.0}
+                
+            # Pega o nó atual da trajetória para usar como alvo intermediário
+            target_x = self.traj[0, self.target_idx]
+            target_y = self.traj[1, self.target_idx]
+            local_goal = np.array([target_x, target_y, 0.0]) # Usa a mesma formatação [x,y,theta]
+            
+            # Segue esse nó da trajetória local usando o seu potential field control do TP passado
+            command = potential_field_control(self.lidar(), self.corrected_pose, local_goal)
+            
+            # Checa a distância em relação a esse pequeno nó atual. Se estiver perto (~10 px/cm), mira no próximo nó
+            dist = np.sqrt((self.corrected_pose[0] - target_x)**2 + (self.corrected_pose[1] - target_y)**2)
+            if dist < 25.0:
+                self.target_idx += 1
+                
+            return command
