@@ -139,10 +139,10 @@ class MyRobotSlam(RobotAbstract):
                 return {"forward": 0.0, "rotation": 0.0}
             
             # --- REPLANNING DINÂMICO ---
-            # A cada 20 iterações, recalcula a rota do ponto atual até o destino
+            # A cada 40 iterações, recalcula a rota do ponto atual até o destino
             # Isso permite adaptar-se dinamicamente se descobrir novas paredes
             self.replanning_counter += 1
-            if self.replanning_counter >= 20:
+            if self.replanning_counter >= 40:
                 print(f"[REPLANNING] Recalculando rota da posição {self.corrected_pose[:2]}...")
                 new_traj = self.planner.plan(self.corrected_pose, self.destino)
                 
@@ -167,7 +167,7 @@ class MyRobotSlam(RobotAbstract):
             
             # Checa a distância em relação a esse pequeno nó atual. Se estiver perto (~10 px/cm), mira no próximo nó
             dist = np.sqrt((self.corrected_pose[0] - target_x)**2 + (self.corrected_pose[1] - target_y)**2)
-            if dist < 25.0:
+            if dist < 40.0:
                 self.target_idx += 1
                 
             return command

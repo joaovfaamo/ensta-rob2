@@ -91,7 +91,7 @@ class Planner:
         
         # Cria um kernel de dilatação MUITO MAIOR para criar uma margem de segurança enorme ao redor das paredes
         # Isso força o A* a ficar longe das paredes mesmo se houver incerteza no mapa
-        kernel = np.ones((9, 9), np.uint8)
+        kernel = np.ones((7, 7), np.uint8)
         dilated_walls = cv2.dilate(walls_mask, kernel, iterations=1)
         
         # Aplica os obstáculos dilatados de volta ao mapa de paredes marcando as proximidades como ocupadas
