@@ -28,7 +28,8 @@ class MyRobotSlam(RobotAbstract):
 
         # step counter to deal with init and display
         self.counter = 0
-
+# No __init__ de MyRobotSlam:
+        self.returning_to_home = False  # Novo flag para o estado de retorno
         # Init SLAM object
         # Here we cheat to get an occupancy grid size that's not too large, by using the
         # robot's starting position and the maximum map size that we shouldn't know.
@@ -58,21 +59,24 @@ class MyRobotSlam(RobotAbstract):
         """
         raw_odom = self.odometer_values()
 
-        # 1. Tenta melhorar o "self.odom_pose_ref" (descobrir o erro) e recupera o quão confiável essa medição foi (best_score)
+        # 1. Tenta se localizar e pega o score
         best_score = self.tiny_slam.localise(self.lidar(), raw_odom)
-
-        # 2. Constrói a posição absoluta final para onde o Lidar será colado no mapa de probabilidades
         self.corrected_pose = self.tiny_slam.get_corrected_pose(raw_odom)
 
-        score_threshold = -1# Ou qualquer constante que você otimizou empiricamente assistindo o score
-        
-        if best_score > score_threshold:
+        # DESCOBRINDO O SEU SCORE REAL (Descomente a linha abaixo para ver no terminal)
+        # print(f"Iter: {self.counter} | Score: {best_score:.2f}")
+
+        score_threshold = 100  # Diminua um pouco para começar
+
+        # 2. O SEGREDO: Atualiza o mapa cegamente nas primeiras 50 iterações (Cold Start)
+        # Depois disso, só atualiza se o score for bom o suficiente.
+        if self.counter < 50 or best_score > score_threshold:
             self.tiny_slam.update_map(self.lidar(), self.corrected_pose)
                 
-
-        # 2. Incrementa o contador
+        # 3. Incrementa o contador
         self.counter += 1
 
+        # ... (resto do seu código de affichage e return) ...
         # 3. Affichage (1 vez a cada 10)
         if self.counter % 10 == 0:
             # Exibe o mapa original de probabilidades diretemente, permitindo ver o degrade de log-odds
@@ -109,7 +113,7 @@ class MyRobotSlam(RobotAbstract):
 
     def control_tp5(self):
         """
-        Implementation of the final planning routine for TP5
+        Implementation of the final planning routine for TP5 with Return to Base
         """
         exploration_iterations = 200
 
@@ -119,10 +123,10 @@ class MyRobotSlam(RobotAbstract):
             
         elif self.counter == exploration_iterations:
             # À une itération choisie, calculez le plus court chemin
-            print("Calculando caminho de volta para a origem...")
+            print("Fase de exploração concluída. Calculando rota para o objetivo...")
             
             # VOCÊ PODE ALTERAR O DESTINO AQUI: (x, y, theta)
-            self.destino = np.array([-500, -200, 0.0])
+            self.destino = np.array([-900, -50, 0.0])
             self.traj = self.planner.plan(self.corrected_pose, self.destino)
             
             self.target_idx = 0
@@ -133,34 +137,56 @@ class MyRobotSlam(RobotAbstract):
             if self.traj is None:
                 return {"forward": 0.0, "rotation": 0.0}
                 
-            # Arrêtez-vous lorsque le robot est revenu au point de départ
+            # --- MÁQUINA DE ESTADOS: Verifica se chegou ao fim da trajetória atual ---
             if self.target_idx >= self.traj.shape[1]:
-                print("🏁 Ponto de partida alcançado!")
-                return {"forward": 0.0, "rotation": 0.0}
+                if not self.returning_to_home:
+                    # ACABOU DE CHEGAR NO OBJETIVO -> HORA DE VOLTAR
+                    print("🏁 Objetivo atingido! Calculando rota de retorno para a origem...")
+                    self.returning_to_home = True
+                    # Ponto de partida inicial
+                    self.destino = np.array([0.0, 0.0, 0.0]) 
+                    self.traj = self.planner.plan(self.corrected_pose, self.destino)
+                    self.target_idx = 0
+                    
+                    if self.traj is None:
+                        print("Erro: Não foi possível encontrar caminho de volta.")
+                        return {"forward": 0.0, "rotation": 0.0}
+                else:
+                    # JÁ CHEGOU A CASA
+                    print("🏠 Missão cumprida: Robô de volta à base!")
+                    return {"forward": 0.0, "rotation": 0.0}
             
-            # --- REPLANNING DINÂMICO ---
-            # A cada 40 iterações, recalcula a rota do ponto atual até o destino
-            # Isso permite adaptar-se dinamicamente se descobrir novas paredes
-            self.replanning_counter += 1
-            if self.replanning_counter >= 40:
-                print(f"[REPLANNING] Recalculando rota da posição {self.corrected_pose[:2]}...")
+            # 1. Pega o nó atual da trajetória para usar como alvo intermediário
+            target_x = self.traj[0, self.target_idx]
+            target_y = self.traj[1, self.target_idx]
+            
+            # --- REPLANNING INTELIGENTE BASEADO NO MAPA ---
+            map_coord = self.occupancy_grid.conv_world_to_map(target_x, target_y)
+            i, j = int(map_coord[0]), int(map_coord[1])
+            
+            is_path_blocked = False
+            # Checa se o índice está dentro dos limites do mapa para evitar erros
+            if 0 <= i < self.occupancy_grid.x_max_map and 0 <= j < self.occupancy_grid.y_max_map:
+                # Se a probabilidade log-odds for maior que 0, é uma parede confirmada
+                if self.occupancy_grid.occupancy_map[i, j] > 0.0:
+                    is_path_blocked = True
+
+            # Se o caminho à frente bloqueou, paramos para recalcular
+            if is_path_blocked:
+                print(f"[REPLANNING] Obstáculo no caminho! Recalculando rota da posição {self.corrected_pose[:2]}...")
                 new_traj = self.planner.plan(self.corrected_pose, self.destino)
                 
                 if new_traj is not None:
-                    # Conseguiu encontrar um novo caminho, atualiza
                     self.traj = new_traj
                     self.target_idx = 0
                     print(f"[REPLANNING] ✓ Nova rota calculada com {self.traj.shape[1]} waypoints")
+                    target_x = self.traj[0, self.target_idx]
+                    target_y = self.traj[1, self.target_idx]
                 else:
-                    # Caminho bloqueado! Continua tentando com o caminho antigo
-                    print(f"[REPLANNING] ⚠ Caminho bloqueado! Continuando com trajetória anterior...")
-                
-                self.replanning_counter = 0
-                
-            # Pega o nó atual da trajetória para usar como alvo intermediário
-            target_x = self.traj[0, self.target_idx]
-            target_y = self.traj[1, self.target_idx]
-            local_goal = np.array([target_x, target_y, 0.0]) # Usa a mesma formatação [x,y,theta]
+                    print(f"[REPLANNING] ⚠ Caminho global bloqueado! Tentando seguir a rota antiga...")
+
+            # 2. Monta o local goal atualizado e envia para o campo potencial
+            local_goal = np.array([target_x, target_y, 0.0]) 
             
             # Segue esse nó da trajetória local usando o seu potential field control do TP passado
             command = potential_field_control(self.lidar(), self.corrected_pose, local_goal)
