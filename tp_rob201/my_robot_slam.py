@@ -64,9 +64,9 @@ class MyRobotSlam(RobotAbstract):
         self.corrected_pose = self.tiny_slam.get_corrected_pose(raw_odom)
 
         # DESCOBRINDO O SEU SCORE REAL (Descomente a linha abaixo para ver no terminal)
-        # print(f"Iter: {self.counter} | Score: {best_score:.2f}")
+        print(f"Iter: {self.counter} | Score: {best_score:.2f}")
 
-        score_threshold = 100  # Diminua um pouco para começar
+        score_threshold = 100 # Diminua um pouco para começar
 
         # 2. O SEGREDO: Atualiza o mapa cegamente nas primeiras 50 iterações (Cold Start)
         # Depois disso, só atualiza se o score for bom o suficiente.
@@ -191,9 +191,18 @@ class MyRobotSlam(RobotAbstract):
             # Segue esse nó da trajetória local usando o seu potential field control do TP passado
             command = potential_field_control(self.lidar(), self.corrected_pose, local_goal)
             
-            # Checa a distância em relação a esse pequeno nó atual. Se estiver perto (~10 px/cm), mira no próximo nó
+            # --- VERIFICAÇÃO DE CHEGADA NO WAYPOINT ---
             dist = np.sqrt((self.corrected_pose[0] - target_x)**2 + (self.corrected_pose[1] - target_y)**2)
-            if dist < 40.0:
-                self.target_idx += 1
+            
+            # Verifica se este é o ÚLTIMO ponto da rota (o destino final)
+            if self.target_idx == self.traj.shape[1] - 1:
+                # Exige uma precisão extrema para dar a missão como concluída
+                # Como seu campo potencial para em 'distance < 2', 2.0 é o valor perfeito!
+                if dist <= 2.0: 
+                    self.target_idx += 1
+            else:
+                # Se for apenas um waypoint no meio do caminho, mantém 40.0 para fluidez
+                if dist < 40.0:
+                    self.target_idx += 1
                 
             return command
