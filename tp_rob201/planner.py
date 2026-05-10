@@ -39,7 +39,8 @@ class Planner:
             for j in range(current_cell_j - 1, current_cell_j + 2):
                 if (i, j) != current_cell:  # Exclude the current cell itself
                     if 0 <= i < self.grid.x_max_map and 0 <= j < self.grid.y_max_map:  # Check bounds
-                        if self.map_walls[i, j] < 1:  # Modificado: Log-odds livre (<0) ou desconhecido (0)
+                        # Permitimos andar pelo verde (< 1) novamente para não travar nos "Buraquinhos" deixados pelo laser
+                        if self.map_walls[i, j] < 1:  
                             neighbor_list.append((i, j))
 
         return neighbor_list
@@ -95,6 +96,19 @@ class Planner:
         # Aplica os obstáculos dilatados de volta ao mapa de paredes marcando as proximidades como ocupadas
         self.map_walls[dilated_walls > 0] = 5
 
+        # --- CORREÇÃO SUPREMA ---
+        # Como agora exigimos que o robô só ande na área testada "Azul" (< -0.1), se o local 
+        # embaixo do robô continuou verde (0) ele não acha o caminho e dá 'failed'.
+        # Aqui forçamos o robô a enxergar uma "bolha livre" (azul) no começo e no final da rota:
+        sx, sy = int(start[0]), int(start[1])
+        gx, gy = int(goal[0]), int(goal[1])
+        for i in range(max(0, sx-2), min(int(self.grid.x_max_map), sx+3)):
+            for j in range(max(0, sy-2), min(int(self.grid.y_max_map), sy+3)):
+                self.map_walls[i, j] = -1.0
+        for i in range(max(0, gx-2), min(int(self.grid.x_max_map), gx+3)):
+            for j in range(max(0, gy-2), min(int(self.grid.y_max_map), gy+3)):
+                self.map_walls[i, j] = -1.0
+
 
         # cv2.imshow("map_walls", sel.map_walls)
 
@@ -130,7 +144,21 @@ class Planner:
 
             neighbours = self.get_neighbors(current_cell)
             for cell in neighbours:
-                tentative_g_score = g_score[current_cell] + self.heuristic(current_cell, cell)
+                
+                # --- NOVO SISTEMA DE CUSTOS INTELIGENTE ---
+                # A base do custo é a distância natural
+                step_cost = self.heuristic(current_cell, cell)
+                
+                # Se for uma célula VERDE (desconhecida/não validada pelo Lidar)...
+                # Multiplicamos o peso absurdamente! (x50). Assim, ele pode pisar nelas
+                # pra consertar pequenos "buraquinhos" de raio laser espalhados no mapa,
+                # MAS se tiver que atravessar uma PONTE verde (onde seria a parede escondida),
+                # vai custar tão mais caro que o A* julgará melhor rodear por todo corredor AZUL!
+                if self.map_walls[cell[0], cell[1]] >= -0.1:
+                    step_cost *= 50.0
+                    
+                tentative_g_score = g_score[current_cell] + step_cost
+                
                 if tentative_g_score < g_score[cell]:
                     # better path, recording it
                     came_from[cell] = current_cell
