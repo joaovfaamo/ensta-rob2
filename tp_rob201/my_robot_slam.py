@@ -46,6 +46,10 @@ class MyRobotSlam(RobotAbstract):
         # storage for pose after localization
         self.corrected_pose = np.array([0, 0, 0])
 
+        # storage for path planning
+        self.traj = None
+        self.target_idx = 0
+
     def control(self):
         """
         Main control function executed at each time step

@@ -49,6 +49,8 @@ class Planner:
         """ Return heuristic goal distance """
         h = 0
             # TODO for TP5: compute heuristic distance between cell_1 and cell_2
+        h = math.sqrt((cell_1[0] - cell_2[0]) ** 2 + (cell_1[1] - cell_2[1]) ** 2)
+        
         return h
 
 
@@ -81,7 +83,17 @@ class Planner:
         # creates a copy of occupancy map to modify it and take into account
         # a margin in the walls
         self.map_walls = copy.deepcopy(self.grid.occupancy_map)
+        
         # TODO for TP5: dilate walls in self.map_walls to take into account a margin around obstacles
+        # Consideramos como parede o que tiver probabilidade log-odds maior que um limiar (ex: > 0)
+        walls_mask = (self.map_walls > 0).astype(np.uint8)
+        
+        # Cria um kernel de dilatação (ex: 5x5 pixels de margem de segurança)
+        kernel = np.ones((5, 5), np.uint8)
+        dilated_walls = cv2.dilate(walls_mask, kernel, iterations=1)
+        
+        # Aplica os obstáculos dilatados de volta ao mapa de paredes marcando as proximidades como ocupadas
+        self.map_walls[dilated_walls > 0] = 5
 
 
         # cv2.imshow("map_walls", sel.map_walls)
@@ -136,3 +148,5 @@ class Planner:
         """ Frontier based exploration """
         goal = np.array([0, 0, 0])  # frontier to reach for exploration
         return goal
+
+        
