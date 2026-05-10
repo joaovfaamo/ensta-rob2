@@ -49,6 +49,8 @@ class MyRobotSlam(RobotAbstract):
         # storage for path planning
         self.traj = None
         self.target_idx = 0
+        self.replanning_counter = 0  # Contador para replanning dinâmico
+        self.destino = None  # Armazena o destino para usar no replanning
 
     def control(self):
         """
@@ -120,8 +122,8 @@ class MyRobotSlam(RobotAbstract):
             print("Calculando caminho de volta para a origem...")
             
             # VOCÊ PODE ALTERAR O DESTINO AQUI: (x, y, theta)
-            destino = np.array([-200, -200, 0.0])
-            self.traj = self.planner.plan(self.corrected_pose, destino)
+            self.destino = np.array([-200, -200, 0.0])
+            self.traj = self.planner.plan(self.corrected_pose, self.destino)
             
             self.target_idx = 0
             return {"forward": 0.0, "rotation": 0.0} # Para para pensar
@@ -135,6 +137,25 @@ class MyRobotSlam(RobotAbstract):
             if self.target_idx >= self.traj.shape[1]:
                 print("🏁 Ponto de partida alcançado!")
                 return {"forward": 0.0, "rotation": 0.0}
+            
+            # --- REPLANNING DINÂMICO ---
+            # A cada 20 iterações, recalcula a rota do ponto atual até o destino
+            # Isso permite adaptar-se dinamicamente se descobrir novas paredes
+            self.replanning_counter += 1
+            if self.replanning_counter >= 20:
+                print(f"[REPLANNING] Recalculando rota da posição {self.corrected_pose[:2]}...")
+                new_traj = self.planner.plan(self.corrected_pose, self.destino)
+                
+                if new_traj is not None:
+                    # Conseguiu encontrar um novo caminho, atualiza
+                    self.traj = new_traj
+                    self.target_idx = 0
+                    print(f"[REPLANNING] ✓ Nova rota calculada com {self.traj.shape[1]} waypoints")
+                else:
+                    # Caminho bloqueado! Continua tentando com o caminho antigo
+                    print(f"[REPLANNING] ⚠ Caminho bloqueado! Continuando com trajetória anterior...")
+                
+                self.replanning_counter = 0
                 
             # Pega o nó atual da trajetória para usar como alvo intermediário
             target_x = self.traj[0, self.target_idx]

@@ -89,8 +89,9 @@ class Planner:
         # Consideramos como parede o que tiver probabilidade log-odds maior que um limiar (ex: > 0)
         walls_mask = (self.map_walls > 0).astype(np.uint8)
         
-        # Cria um kernel de dilatação maior para afastar a trajetória das quinas e paredes
-        kernel = np.ones((5, 5), np.uint8)
+        # Cria um kernel de dilatação MUITO MAIOR para criar uma margem de segurança enorme ao redor das paredes
+        # Isso força o A* a ficar longe das paredes mesmo se houver incerteza no mapa
+        kernel = np.ones((9, 9), np.uint8)
         dilated_walls = cv2.dilate(walls_mask, kernel, iterations=1)
         
         # Aplica os obstáculos dilatados de volta ao mapa de paredes marcando as proximidades como ocupadas
