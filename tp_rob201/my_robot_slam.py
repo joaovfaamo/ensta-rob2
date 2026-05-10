@@ -122,7 +122,7 @@ class MyRobotSlam(RobotAbstract):
             print("Calculando caminho de volta para a origem...")
             
             # VOCÊ PODE ALTERAR O DESTINO AQUI: (x, y, theta)
-            self.destino = np.array([-200, -200, 0.0])
+            self.destino = np.array([-500, -200, 0.0])
             self.traj = self.planner.plan(self.corrected_pose, self.destino)
             
             self.target_idx = 0
