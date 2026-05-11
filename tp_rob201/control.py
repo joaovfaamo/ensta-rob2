@@ -172,6 +172,15 @@ def potential_field_control(lidar, current_pose, goal_pose):
     speed_base = 0.4 * force_magnitude
     rotation_speed = 0.5 * angle_diff  # Gira proporcionalmente ao ERRO de ângulo
     
+    # --- REDUTOR DE VELOCIDADE ANTI-DERRAPAGEM ---
+    # Se o robô estiver sentindo alguma repulsão das paredes (mag > 0.0), a gente corta a 
+    # velocidade máxima pela metade para que os pneus não patinem ("escorreguem" na odometria)
+    if 'direction_repulsive' in locals():
+        mag_repulsive = np.linalg.norm(direction_repulsive)
+        if mag_repulsive > 0.1:
+            speed_base = min(speed_base, 0.3)
+            rotation_speed = float(np.clip(rotation_speed, -0.5, 0.5)) # Gira suavemente para esquivar
+            
     # Reduz a velocidade se o erro de angulo for muito grande (pra n ir reto na parede enqnto vira)
     if abs(angle_diff) > np.pi / 4: # Se o erro for maior que 45 graus
         speed_base = 0.1 # Anda bem devagarzinho

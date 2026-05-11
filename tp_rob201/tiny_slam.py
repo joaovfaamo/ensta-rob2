@@ -63,6 +63,7 @@ class TinySlam:
         
         # Rotacionar a odometria "mente" usando o ângulo corrigido da referência
         # e depois aplicar a translação
+    
         corr_x = ref_x + odom_pose[0] * np.cos(ref_t) - odom_pose[1] * np.sin(ref_t)
         corr_y = ref_y + odom_pose[0] * np.sin(ref_t) + odom_pose[1] * np.cos(ref_t)
         
@@ -90,12 +91,13 @@ class TinySlam:
         best_score = self._score(lidar, corrected_pose)
 
         # 2. Pesquisa Aleatória para encontrar melhor referência
-        N_max = 300  # Aumentado drasticamente para aguentar movimentos do teclado
+        # N_max foi reduzido para otimizar o desempenho, caso contrário a simulação fica muito lenta.
+        N_max = 200  
         no_improve_count = 0
         
         # Desvios padrão para [x, y, theta] da matriz de ruído
-        # Sigma muito mais amplo para perdoar giros e saltos de odometria altos do input manual
-        sigma = np.array([0.1, 0.1, 0.08])
+        # Um sigma balanceado para permitir corrigir pulos sem ser uma busca totalmente aleatória.
+        sigma = np.array([0.1, 0.1, 0.05])
 
         while no_improve_count < N_max:
             # 3. Adicionar ruído na POSIÇÃO DE REFERÊNCIA, não na odometria bruta

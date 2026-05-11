@@ -66,10 +66,10 @@ class MyRobotSlam(RobotAbstract):
         # DESCOBRINDO O SEU SCORE REAL (Descomente a linha abaixo para ver no terminal)
         print(f"Iter: {self.counter} | Score: {best_score:.2f}")
 
-        score_threshold = 100 # Diminua um pouco para começar
+        # Aumentamos o threshold para ser mais rigoroso e evitar mapear paredes falsas (fantasmas)
+        score_threshold = 250 
 
-        # 2. O SEGREDO: Atualiza o mapa cegamente nas primeiras 50 iterações (Cold Start)
-        # Depois disso, só atualiza se o score for bom o suficiente.
+        # 2. O SEGREDO: Só atualiza o mapa se o score for bom o suficiente ou nas primeiras iterações
         if self.counter < 50 or best_score > score_threshold:
             self.tiny_slam.update_map(self.lidar(), self.corrected_pose)
                 
@@ -126,7 +126,7 @@ class MyRobotSlam(RobotAbstract):
             print("Fase de exploração concluída. Calculando rota para o objetivo...")
             
             # VOCÊ PODE ALTERAR O DESTINO AQUI: (x, y, theta)
-            self.destino = np.array([-900, -50, 0.0])
+            self.destino = np.array([-950, -70, 0.0])
             self.traj = self.planner.plan(self.corrected_pose, self.destino)
             
             self.target_idx = 0
@@ -141,7 +141,16 @@ class MyRobotSlam(RobotAbstract):
             if self.target_idx >= self.traj.shape[1]:
                 if not self.returning_to_home:
                     # ACABOU DE CHEGAR NO OBJETIVO -> HORA DE VOLTAR
-                    print("🏁 Objetivo atingido! Calculando rota de retorno para a origem...")
+                    print("🏁 Objetivo atingido! Recalibrando SLAM intensamente antes de voltar...")
+                    
+                    # FORÇAR RE-LOCALIZAÇÃO: Como o robô está parado agora no destino, rodamos a localização 
+                    # do SLAM dezenas de vezes. Isso faz o algoritmo alinhar o mapa atual perfeitamente, 
+                    # resetando o acúmulo temporário antes de virar para ir embora mapeando!
+                    raw_odom = self.odometer_values()
+                    for _ in range(15):
+                        self.tiny_slam.localise(self.lidar(), raw_odom)
+                    self.corrected_pose = self.tiny_slam.get_corrected_pose(raw_odom)
+
                     self.returning_to_home = True
                     # Ponto de partida inicial
                     self.destino = np.array([0.0, 0.0, 0.0]) 
@@ -164,6 +173,7 @@ class MyRobotSlam(RobotAbstract):
             map_coord = self.occupancy_grid.conv_world_to_map(target_x, target_y)
             i, j = int(map_coord[0]), int(map_coord[1])
             
+            # Checa se o caminho para o próximo waypoint está bloqueado no mapa de ocupação
             is_path_blocked = False
             # Checa se o índice está dentro dos limites do mapa para evitar erros
             if 0 <= i < self.occupancy_grid.x_max_map and 0 <= j < self.occupancy_grid.y_max_map:
@@ -188,7 +198,7 @@ class MyRobotSlam(RobotAbstract):
             # 2. Monta o local goal atualizado e envia para o campo potencial
             local_goal = np.array([target_x, target_y, 0.0]) 
             
-            # Segue esse nó da trajetória local usando o seu potential field control do TP passado
+            # Segue esse nó da trajetória local usando o potential field control do TP passado
             command = potential_field_control(self.lidar(), self.corrected_pose, local_goal)
             
             # --- VERIFICAÇÃO DE CHEGADA NO WAYPOINT ---
@@ -196,9 +206,9 @@ class MyRobotSlam(RobotAbstract):
             
             # Verifica se este é o ÚLTIMO ponto da rota (o destino final)
             if self.target_idx == self.traj.shape[1] - 1:
-                # Exige uma precisão extrema para dar a missão como concluída
-                # Como seu campo potencial para em 'distance < 2', 2.0 é o valor perfeito!
-                if dist <= 2.0: 
+                # Relaxando a precisão do destino final para evitar que o robô trave
+                # se as forças repulsivas não deixarem ele chegar no 'zero' exato.
+                if dist <= 15.0: 
                     self.target_idx += 1
             else:
                 # Se for apenas um waypoint no meio do caminho, mantém 40.0 para fluidez

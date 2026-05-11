@@ -33,14 +33,13 @@ class Planner:
         neighbor_list = []
         # TODO for TP5: iterate through neighbors and add free ones to neighbor_list
 
-    
-        current_cell_i, current_cell_j = current_cell
+        current_cell_i, current_cell_j = current_cell #Desempacotamos as coordenadas da célula atual para facilitar a iteração
         for i in range(current_cell_i - 1, current_cell_i + 2):
             for j in range(current_cell_j - 1, current_cell_j + 2):
                 if (i, j) != current_cell:  # Exclude the current cell itself
                     if 0 <= i < self.grid.x_max_map and 0 <= j < self.grid.y_max_map:  # Check bounds
                         # Permitimos andar pelo verde (< 1) novamente para não travar nos "Buraquinhos" deixados pelo laser
-                        if self.map_walls[i, j] < 1:  
+                        if self.map_walls[i, j] < 1:  #Verificamos se a célula é livre (menor que 1, ou seja, azul ou verde)
                             neighbor_list.append((i, j))
 
         return neighbor_list
@@ -48,6 +47,7 @@ class Planner:
 
     def heuristic(self, cell_1: Tuple[int, int], cell_2: Tuple[int, int]):
         """ Return heuristic goal distance """
+        #Return the Euclidean distance between the two cells
         h = 0
             # TODO for TP5: compute heuristic distance between cell_1 and cell_2
         h = math.sqrt((cell_1[0] - cell_2[0]) ** 2 + (cell_1[1] - cell_2[1]) ** 2)
@@ -76,7 +76,7 @@ class Planner:
         goal : [x, y, theta] nparray, goal pose in world coordinates (theta unused)
         """
 
-
+        # Convert start and goal from world coordinates to map coordinates (i, j)
         start: Tuple[int, int] = self.grid.conv_world_to_map(start[0], start[1])
         goal: Tuple[int, int] = self.grid.conv_world_to_map(goal[0], goal[1])
 
@@ -89,30 +89,33 @@ class Planner:
         # Consideramos como parede o que tiver probabilidade log-odds maior que um limiar (ex: > 0)
         walls_mask = (self.map_walls > 0).astype(np.uint8)
         
-        # Cria um kernel de dilatação MUITO MAIOR para criar uma margem de segurança enorme ao redor das paredes
-        # Isso força o A* a ficar longe das paredes mesmo se houver incerteza no mapa
-        kernel = np.ones((7, 7), np.uint8)
-        dilated_walls = cv2.dilate(walls_mask, kernel, iterations=1)
+        # Cria um kernel menor para bloqueio rígido (evita colisão sem tapar corredores de vez)
+        # Aumentei levemente para 7x7 para que ele passe as quinas ainda com uma bordinha extra de segurança física
+        kernel_obst = np.ones((9, 9), np.uint8)
+        dilated_walls = cv2.dilate(walls_mask, kernel_obst, iterations=1)
         
-        # Aplica os obstáculos dilatados de volta ao mapa de paredes marcando as proximidades como ocupadas
+        # Cria uma "Aura / Zona de Desconforto" larga para forçar o A* pelo meio
+        kernel_soft = np.ones((17, 17), np.uint8)
+        self.soft_walls = cv2.dilate(walls_mask, kernel_soft, iterations=1)
+        
+        # Aplica os obstáculos dilatados rígidos ao mapa de paredes
         self.map_walls[dilated_walls > 0] = 5
 
-        # --- CORREÇÃO SUPREMA ---
-        # Como agora exigimos que o robô só ande na área testada "Azul" (< -0.1), se o local 
-        # embaixo do robô continuou verde (0) ele não acha o caminho e dá 'failed'.
-        # Aqui forçamos o robô a enxergar uma "bolha livre" (azul) no começo e no final da rota:
-        sx, sy = int(start[0]), int(start[1])
-        gx, gy = int(goal[0]), int(goal[1])
-        for i in range(max(0, sx-2), min(int(self.grid.x_max_map), sx+3)):
-            for j in range(max(0, sy-2), min(int(self.grid.y_max_map), sy+3)):
-                self.map_walls[i, j] = -1.0
-        for i in range(max(0, gx-2), min(int(self.grid.x_max_map), gx+3)):
-            for j in range(max(0, gy-2), min(int(self.grid.y_max_map), gy+3)):
-                self.map_walls[i, j] = -1.0
-
+        # Garante que as áreas do ponto de partida e do objetivo estejam sempre livres (desobstrui a dilatação neles)
+        # Isso evita que o robô não consiga gerar uma rota por estar "preso" dentro de uma margem virtual
+        for x in range(start[0]-2, start[0]+3):
+            for y in range(start[1]-2, start[1]+3):
+                if 0 <= x < self.grid.x_max_map and 0 <= y < self.grid.y_max_map:
+                    if self.map_walls[x, y] == 5: # Só limpa as margens virtuais, mantém obstáculos reais (>0)
+                        self.map_walls[x, y] = 0
+                    
+        for x in range(goal[0]-2, goal[0]+3):
+            for y in range(goal[1]-2, goal[1]+3):
+                if 0 <= x < self.grid.x_max_map and 0 <= y < self.grid.y_max_map:
+                    if self.map_walls[x, y] == 5:
+                        self.map_walls[x, y] = 0
 
         # cv2.imshow("map_walls", sel.map_walls)
-
 
         # min heap to contain values to explore next
         open_set = [(0.0, start)]
@@ -122,7 +125,7 @@ class Planner:
         # dictionary to trace back route
         came_from = {}
 
-
+        #Para que
         # cost to get to each cell
         g_score = defaultdict(lambda: math.inf)
         g_score[start] = 0.0
@@ -132,7 +135,7 @@ class Planner:
         f_score = defaultdict(lambda: math.inf)
         f_score[start] = 0.0 + self.heuristic(start, goal)
 
-
+        # main loop of A*
         while len(open_set) > 0:
             current = heapq.heappop(open_set)
             current_f, current_cell = current
@@ -149,6 +152,11 @@ class Planner:
                 # --- NOVO SISTEMA DE CUSTOS INTELIGENTE ---
                 # A base do custo é a distância natural
                 step_cost = self.heuristic(current_cell, cell)
+                
+                # Penaliza o A* brutalmente se ele andar muito perto da parede (na zona soft_walls)
+                # Assim ele é obrigado a escolher as células no MEIO dos corredores!
+                if hasattr(self, "soft_walls") and self.soft_walls[cell[0], cell[1]] > 0:
+                    step_cost *= 15.0
                 
                 # Se for uma célula VERDE (desconhecida/não validada pelo Lidar)...
                 # Multiplicamos o peso absurdamente! (x50). Assim, ele pode pisar nelas
