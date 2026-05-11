@@ -29,7 +29,7 @@ class MyRobotSlam(RobotAbstract):
         # step counter to deal with init and display
         self.counter = 0
 # No __init__ de MyRobotSlam:
-        self.returning_to_home = False  # Novo flag para o estado de retorno
+        self.returning_to_home = False  # # New flag for return state
         # Init SLAM object
         # Here we cheat to get an occupancy grid size that's not too large, by using the
         # robot's starting position and the maximum map size that we shouldn't know.
@@ -50,8 +50,8 @@ class MyRobotSlam(RobotAbstract):
         # storage for path planning
         self.traj = None
         self.target_idx = 0
-        self.replanning_counter = 0  # Contador para replanning dinâmico
-        self.destino = None  # Armazena o destino para usar no replanning
+        self.replanning_counter = 0  # # Counter for dynamic replanning
+        self.destino = None  # # Store destination for replanning
 
     def control(self):
         """
@@ -59,34 +59,34 @@ class MyRobotSlam(RobotAbstract):
         """
         raw_odom = self.odometer_values()
 
-        # 1. Tenta se localizar e pega o score
+        # 1. # Try to localise and get score
         best_score = self.tiny_slam.localise(self.lidar(), raw_odom)
         self.corrected_pose = self.tiny_slam.get_corrected_pose(raw_odom)
 
-        # DESCOBRINDO O SEU SCORE REAL (Descomente a linha abaixo para ver no terminal)
+        # # DISCOVERING YOUR REAL SCORE (Uncomment the line below to view in terminal)
         print(f"Iter: {self.counter} | Score: {best_score:.2f}")
 
-        # Aumentamos o threshold para ser mais rigoroso e evitar mapear paredes falsas (fantasmas)
+        # # Increased threshold to be stricter and avoid mapping fake walls (ghosts)
         score_threshold = 250 
 
-        # 2. O SEGREDO: Só atualiza o mapa se o score for bom o suficiente ou nas primeiras iterações
+        # 2. # THE SECRET: Only update map if score is good enough or in the first iterations
         if self.counter < 50 or best_score > score_threshold:
             self.tiny_slam.update_map(self.lidar(), self.corrected_pose)
                 
-        # 3. Incrementa o contador
+        # 3. # Increment counter
         self.counter += 1
 
-        # ... (resto do seu código de affichage e return) ...
-        # 3. Affichage (1 vez a cada 10)
+        # ... (rest of the display and return code) ...
+        # 3. Display (1 time every 10)
         if self.counter % 10 == 0:
-            # Exibe o mapa original de probabilidades diretemente, permitindo ver o degrade de log-odds
-            # sem forcar hard limits (seuillage visual)
+            # # Display original probability map directly, allowing log-odds gradient to be seen
+            # # without forcing hard limits (visual thresholding)
             if self.traj is not None:
                 self.occupancy_grid.display_cv(self.corrected_pose, np.array([0, 0, 0]), self.traj)
             else:
                 self.occupancy_grid.display_cv(self.corrected_pose)
 
-        return self.control_tp1()
+        return self.control_tp5()
 
     
     def control_tp1(self):
@@ -104,8 +104,8 @@ class MyRobotSlam(RobotAbstract):
         Main control function with full SLAM, random exploration and path planning
         """
         pose = self.odometer_values()
-        goal = [-400, -400, 3.14/2 ]
-       # [-600, -30, 3.14/2 ] é um destino mais fácil para o robô encontrar a rota, mas sinta-se livre para testar outros pontos!
+        goal = [-600, -10, 3.14/2 ]
+       #  # is an easier destination to find route, but feel free to test other spots!
        # [-400, -400, 3.14/2 ]
      
         # Compute new command speed to perform obstacle avoidance
@@ -121,82 +121,82 @@ class MyRobotSlam(RobotAbstract):
 
         if self.counter < exploration_iterations:
             # Cartographie/exploration
-            return self.control_tp1() # Usa reactive obstacle avoidance para bater perna e mapear
+            return self.control_tp1() # # Uses reactive obstacle avoidance to wander and map
             
         elif self.counter == exploration_iterations:
             # À une itération choisie, calculez le plus court chemin
-            print("Fase de exploração concluída. Calculando rota para o objetivo...")
+            print("Exploration phase concluded. Calculating route to target...")
             
-            # VOCÊ PODE ALTERAR O DESTINO AQUI: (x, y, theta)
+            # # YOU CAN CHANGE DESTINATION HERE: (x, y, theta)
             self.destino = np.array([-600, -20, 0.0])
             #-300,-50
             # -600, -20
             # -500, -500
             #-150, -200
-            #-950, -70, 0.0 é um destino mais fácil para o robô encontrar a rota, mas sinta-se livre para testar outros pontos!
+            #-950, -70, 0.0 # is an easier destination to find route, but feel free to test other spots!
             self.traj = self.planner.plan(self.corrected_pose, self.destino)
             
             self.target_idx = 0
-            return {"forward": 0.0, "rotation": 0.0} # Para para pensar
+            return {"forward": 0.0, "rotation": 0.0} # # Stop to think
             
         else:
             # Pour les itérations suivantes, utilisez un contrôleur local
             if self.traj is None:
                 return {"forward": 0.0, "rotation": 0.0}
                 
-            # --- MÁQUINA DE ESTADOS: Verifica se chegou ao fim da trajetória atual ---
+            # --- # STATE MACHINE: Check if arrived at end of current trajectory ---
             if self.target_idx >= self.traj.shape[1]:
                 if not self.returning_to_home:
-                    # ACABOU DE CHEGAR NO OBJETIVO -> HORA DE VOLTAR
-                    print("🏁 Objetivo atingido! Recalibrando SLAM intensamente antes de voltar...")
+                    # # JUST REACHED THE TARGET -> TIME TO RETURN
+                    print("🏁 Target reached! Recalibrating SLAM intensely before returning...")
                     
-                    # FORÇAR RE-LOCALIZAÇÃO: Como o robô está parado agora no destino, rodamos a localização 
-                    # do SLAM dezenas de vezes. Isso faz o algoritmo alinhar o mapa atual perfeitamente, 
-                    # resetando o acúmulo temporário antes de virar para ir embora mapeando!
+                    # # FORCE RE-LOCALISATION: Since robot is stopped at destination, we run localisation 
+                    # # of SLAM dozens of times. This makes the algorithm align map perfectly, 
+                    # # resetting temporary accumulation before turning to leave mapping!
                     raw_odom = self.odometer_values()
                     for _ in range(15):
                         self.tiny_slam.localise(self.lidar(), raw_odom)
                     self.corrected_pose = self.tiny_slam.get_corrected_pose(raw_odom)
 
                     self.returning_to_home = True
-                    # Ponto de partida inicial
+                    # # Initial starting point
                     self.destino = np.array([0.0, 0.0, 0.0]) 
                     self.traj = self.planner.plan(self.corrected_pose, self.destino)
                     self.target_idx = 0
                     
                     if self.traj is None:
-                        print("Erro: Não foi possível encontrar caminho de volta.")
+                        print("Error: Could not find return path.")
                         return {"forward": 0.0, "rotation": 0.0}
                 else:
-                    # JÁ CHEGOU A CASA
-                    print("🏠 Missão cumprida: Robô de volta à base!")
+                    # # ALREADY ARRIVED HOME
+                    print("🏠 Mission accomplished: Robot returned to base!")
                     return {"forward": 0.0, "rotation": 0.0}
             
-            # 1. Pega o nó atual da trajetória para usar como alvo intermediário
+            # 1. # Get current trajectory node to use as intermediate target
             target_x = self.traj[0, self.target_idx]
             target_y = self.traj[1, self.target_idx]
             
-            # --- REPLANNING INTELIGENTE BASEADO NO MAPA ---
+            # --- # SMART EXPLORATION REPLANNING BASED ON MAP ---
             map_coord = self.occupancy_grid.conv_world_to_map(target_x, target_y)
             i, j = int(map_coord[0]), int(map_coord[1])
             
-            # Checa se o caminho para o próximo waypoint está bloqueado no mapa de ocupação
+            # # Check if path to next waypoint is blocked in occupancy map
             is_path_blocked = False
-            # Checa se o índice está dentro dos limites do mapa para evitar erros
+            # # Check if index is within map bounds to avoid errors
             if 0 <= i < self.occupancy_grid.x_max_map and 0 <= j < self.occupancy_grid.y_max_map:
-                # Se a probabilidade log-odds for maior que 0, é uma parede confirmada
+                # # If log-odds probability is greater than 0, it is a confirmed wall
                 if self.occupancy_grid.occupancy_map[i, j] > 0.0:
                     is_path_blocked = True
 
-            # Se o caminho à frente bloqueou, paramos para recalcular
+            # # If path ahead is blocked, stop to recalculate
             if is_path_blocked:
-                print(f"[REPLANNING] Obstáculo no caminho! Recalculando rota da posição {self.corrected_pose[:2]}...")
+                print(f"[REPLANNING] Obstacle in path! Recalculating route from position {self.corrected_pose[:2]}...")
                 new_traj = self.planner.plan(self.corrected_pose, self.destino)
                 
                 if new_traj is not None:
                     self.traj = new_traj
                     self.target_idx = 0
-                    print(f"[REPLANNING] ✓ Nova rota calculada com {self.traj.shape[1]} waypoints")
+                    print(f"[REPLANNING] ✓ New route calculated with {self.traj.shape[1]} waypoints")
                     target_x = self.traj[0, self.target_idx]
                     target_y = self.traj[1, self.target_idx]
                 else:

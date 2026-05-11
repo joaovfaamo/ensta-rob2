@@ -20,34 +20,34 @@ class TinySlam:
         lidar : placebot object with lidar data
         pose : [x, y, theta] nparray, position of the robot to evaluate, in world coordinates
         """
-        # 1. Recuperar distâncias e seus respectivos ângulos
+        # 1. # Get distances and respective angles
         laser_dist = lidar.get_sensor_values()
         laser_angles = np.linspace(-np.pi, np.pi, len(laser_dist)) 
         
-        # 2. Filtrar os pontos com distância máxima (não são detecções de obstáculos em si)
+        # 2. # Filter out max distance points (not actual obstacle detections)
         valid_mask = laser_dist < lidar.max_range
-        valid_dist = laser_dist[valid_mask] #Mantém apenas as distâncias válidas (menores que o alcance máximo do lidar)
-        valid_angles = laser_angles[valid_mask] #Mantém apenas os ângulos correspondentes às distâncias válidas
+        valid_dist = laser_dist[valid_mask] ## Keep only valid distances (less than maximum lidar range)
+        valid_angles = laser_angles[valid_mask] ## Keep only angles corresponding to valid distances
         
         if len(valid_dist) == 0:
             return 0
         
-        # 3. Estimar posições absolutas da detecção no mapa
+        # 3. # Estimate absolute map positions of detections
         obs_angles_world = valid_angles + pose[2]
         obs_x = pose[0] + valid_dist * np.cos(obs_angles_world)
         obs_y = pose[1] + valid_dist * np.sin(obs_angles_world)
         
-        # 4. Converter posições métricas (x, y) em índices (pixels) do grid
+        # 4. # Convert metric positions (x,y) to grid indices (pixels)
         map_x, map_y = self.grid.conv_world_to_map(obs_x, obs_y)
         
-        # 5. Remover lidar-points que acabam caindo fora das bordas da grade de mapeamento
+        # 5. # Remove lidar-points falling out of mapping grid bounds
         inside_map_mask = (map_x >= 0) & (map_x < self.grid.x_max_map) & \
                           (map_y >= 0) & (map_y < self.grid.y_max_map)
         
         valid_map_x = map_x[inside_map_mask]
         valid_map_y = map_y[inside_map_mask]
         
-        # 6. Somar (score) a pontuação das células marcadas 
+        # 6. # Sum the score of marked cells 
         score = np.sum(self.grid.occupancy_map[valid_map_x, valid_map_y])
 
         return score
@@ -58,19 +58,19 @@ class TinySlam:
         if odom_pose_ref is None:
             odom_pose_ref = self.odom_pose_ref
             
-        # Extrair parâmetros da referência
+        # # Extract reference parameters
         ref_x, ref_y, ref_t = odom_pose_ref
         
-        # Rotacionar a odometria "mente" usando o ângulo corrigido da referência
-        # e depois aplicar a translação
+        # # Rotate odometry using corrected angle from reference
+        # # and then apply translation
     
         corr_x = ref_x + odom_pose[0] * np.cos(ref_t) - odom_pose[1] * np.sin(ref_t)
         corr_y = ref_y + odom_pose[0] * np.sin(ref_t) + odom_pose[1] * np.cos(ref_t)
         
-        # O ângulo final (theta) é só a soma básica
+        # # Final angle (theta) is just basic sum
         corr_t = ref_t + odom_pose[2]
         
-        # É importante manter o theta restrito entre -pi e pi se o código ficar girando eternamente
+        # # It is important to keep theta mapped [-pi, pi] if code spins forever
         corr_t = (corr_t + np.pi) % (2 * np.pi) - np.pi
         
         corrected_pose = np.array([corr_x, corr_y, corr_t])
@@ -85,18 +85,18 @@ class TinySlam:
         """
         # TODO for TP4
 
-        # 1. Calcular o score inicial usando a posição de referência ATUAL
+        # 1. # Calculate initial score using CURRENT reference position
         best_odom_ref = self.odom_pose_ref.copy()
         corrected_pose = self.get_corrected_pose(raw_odom_pose, best_odom_ref)
         best_score = self._score(lidar, corrected_pose)
 
-        # 2. Pesquisa Aleatória para encontrar melhor referência
-        # N_max foi reduzido para otimizar o desempenho, caso contrário a simulação fica muito lenta.
+        # 2. # Random search to find best reference
+        # # N_max was reduced to optimize performance, otherwise simulation runs slow.
         N_max = 200  
         no_improve_count = 0
         
-        # Desvios padrão para [x, y, theta] da matriz de ruído
-        # Um sigma balanceado para permitir corrigir pulos sem ser uma busca totalmente aleatória.
+        # # Standard deviations [x, y, theta] for noise matrix
+        # # A balanced sigma to allow correcting jumps without purely random search.
         sigma = np.array([0.1, 0.1, 0.05])
 
         while no_improve_count < N_max:
@@ -119,7 +119,7 @@ class TinySlam:
             else:
                 no_improve_count += 1
 
-        # 6. Salvar a melhor referência encontrada do robô no atributo do objeto
+        # 6. # Save the best obtained robot reference in object attribute
         self.odom_pose_ref = best_odom_ref
 
         return best_score
@@ -133,8 +133,8 @@ class TinySlam:
         """
         # TODO for TP3
         
-        #Implementacao do Upload das Probs das Celulas do Mapa
-        #Pega a posicao atual do robo
+        ## Implementation to Upload Cell Probabilities of Map
+        ## Gets current robot position
         current_pose = pose
         laser_dist = lidar.get_sensor_values()
         laser_angles = np.linspace(-np.pi, np.pi, len(laser_dist)) 
@@ -142,15 +142,15 @@ class TinySlam:
         obs_x = current_pose[0] + laser_dist * np.cos(obs_angles_world)  # X coordinates of obstacles in the world frame
         obs_y = current_pose[1] + laser_dist * np.sin(obs_angles_world)  # Y coordinates of obstacles in the world frame
         
-        #A logica aqui é deixar um raio de incerteza ao redor do ponto de impacto do laser (evita instabilidade)
-        free_dist = laser_dist - 0.1  # Diminou para 10cm - Margem menor para paredes ficarem mais vermelhas (mais concentradas)
-        free_dist = np.maximum(free_dist, 0) #Mantem os valores em positivos
+        ## The logic here is to put uncertainty radius around laser impact point (avoids instability)
+        free_dist = laser_dist - 0.1  # # Decreased to 10cm - Smaller margin so walls get redder (more concentrated)
+        free_dist = np.maximum(free_dist, 0) ## Keep positive values
 
-         # Coordenadas Seguras para marcar como livres (um pouco antes do impacto)
+         # # Safe coordinates to set as free (just before impact)
         free_x = current_pose[0] + free_dist * np.cos(obs_angles_world)
         free_y = current_pose[1] + free_dist * np.sin(obs_angles_world)
 
-        # Adicionando um peso mais alto para a parede (bateu = +2 em vez de +1)
+        # # Add higher weight for the wall (hit = +2 instead of +1)
         self.grid.add_map_points(obs_x, obs_y, val=2) #Adiciona os pontos de obstaculos no mapa 
         self.grid.add_map_points(np.array([current_pose[0]]), np.array([current_pose[1]]), val=-1) 
         

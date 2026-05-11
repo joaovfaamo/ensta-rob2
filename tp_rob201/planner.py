@@ -33,7 +33,7 @@ class Planner:
         neighbor_list = []
         # TODO for TP5: iterate through neighbors and add free ones to neighbor_list
 
-        current_cell_i, current_cell_j = current_cell #Desempacotamos as coordenadas da célula atual para facilitar a iteração
+        current_cell_i, current_cell_j = current_cell ## Unpack current cell coordinates to facilitate iteration
         for i in range(current_cell_i - 1, current_cell_i + 2):
             for j in range(current_cell_j - 1, current_cell_j + 2):
                 if (i, j) != current_cell:  # Exclude the current cell itself
@@ -86,23 +86,23 @@ class Planner:
         self.map_walls = copy.deepcopy(self.grid.occupancy_map)
         
         # TODO for TP5: dilate walls in self.map_walls to take into account a margin around obstacles
-        # Consideramos como parede o que tiver probabilidade log-odds maior que um limiar (ex: > 0)
+        # # Consider as wall what has log-odds probability > threshold (e.g. > 0)
         walls_mask = (self.map_walls > 0).astype(np.uint8)
         
-        # Cria um kernel menor para bloqueio rígido (evita colisão sem tapar corredores de vez)
-        # Aumentei levemente para 7x7 para que ele passe as quinas ainda com uma bordinha extra de segurança física
+        # # Create smaller kernel for hard block (avoids collision without completely blocking corridors)
+        # # Increased slightly to 7x7 so it passes corners with physical margin
         kernel_obst = np.ones((9, 9), np.uint8)
         dilated_walls = cv2.dilate(walls_mask, kernel_obst, iterations=1)
         
-        # Cria uma "Aura / Zona de Desconforto" ainda mais larga para forçar o A* bem pelo meio
+        # # Creates even wider Aura/Discomfort Zone to force A* through middle
         kernel_soft = np.ones((25, 25), np.uint8)
         self.soft_walls = cv2.dilate(walls_mask, kernel_soft, iterations=1)
         
-        # Aplica os obstáculos dilatados rígidos ao mapa de paredes
+        # # Apply dilated hard block obstacles to wall map
         self.map_walls[dilated_walls > 0] = 5
 
-        # Garante que as áreas do ponto de partida e do objetivo estejam sempre livres (desobstrui a dilatação neles)
-        # Isso evita que o robô não consiga gerar uma rota por estar "preso" dentro de uma margem virtual
+        # # Ensure start and goal area stay free from expansion
+        # # Prevents robot from being stuck in virtual margins
         for x in range(start[0]-2, start[0]+3):
             for y in range(start[1]-2, start[1]+3):
                 if 0 <= x < self.grid.x_max_map and 0 <= y < self.grid.y_max_map:
@@ -125,7 +125,7 @@ class Planner:
         # dictionary to trace back route
         came_from = {}
 
-        #Para que
+        #So that
         # cost to get to each cell
         g_score = defaultdict(lambda: math.inf)
         g_score[start] = 0.0
@@ -149,12 +149,12 @@ class Planner:
             neighbours = self.get_neighbors(current_cell)
             for cell in neighbours:
                 
-                # --- NOVO SISTEMA DE CUSTOS INTELIGENTE ---
-                # A base do custo é a distância natural
+                # --- # NEW INTELLIGENT COST SYSTEM ---
+                # # Base cost is natural distance
                 step_cost = self.heuristic(current_cell, cell)
                 
-                # Penaliza o A* brutalmente se ele andar muito perto da parede (na zona soft_walls)
-                # Assim ele é obrigado a escolher as células no MEIO dos corredores!
+                # # Penalize A* heavily if walks too near walls (in soft_walls zone)
+                # # So it is forced to choose cells in MIDDLE of corridors!
                 if hasattr(self, "soft_walls") and self.soft_walls[cell[0], cell[1]] > 0:
                     step_cost *= 25.0
                 
