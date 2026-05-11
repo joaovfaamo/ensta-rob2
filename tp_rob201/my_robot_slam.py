@@ -86,7 +86,7 @@ class MyRobotSlam(RobotAbstract):
             else:
                 self.occupancy_grid.display_cv(self.corrected_pose)
 
-        return self.control_tp5()
+        return self.control_tp1()
 
     
     def control_tp1(self):
@@ -105,7 +105,9 @@ class MyRobotSlam(RobotAbstract):
         """
         pose = self.odometer_values()
         goal = [-400, -400, 3.14/2 ]
-
+       # [-600, -30, 3.14/2 ] é um destino mais fácil para o robô encontrar a rota, mas sinta-se livre para testar outros pontos!
+       # [-400, -400, 3.14/2 ]
+     
         # Compute new command speed to perform obstacle avoidance
         command = potential_field_control(self.lidar(), pose, goal)
 
@@ -126,7 +128,12 @@ class MyRobotSlam(RobotAbstract):
             print("Fase de exploração concluída. Calculando rota para o objetivo...")
             
             # VOCÊ PODE ALTERAR O DESTINO AQUI: (x, y, theta)
-            self.destino = np.array([-950, -70, 0.0])
+            self.destino = np.array([-600, -20, 0.0])
+            #-300,-50
+            # -600, -20
+            # -500, -500
+            #-150, -200
+            #-950, -70, 0.0 é um destino mais fácil para o robô encontrar a rota, mas sinta-se livre para testar outros pontos!
             self.traj = self.planner.plan(self.corrected_pose, self.destino)
             
             self.target_idx = 0

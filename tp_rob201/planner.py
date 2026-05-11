@@ -94,8 +94,8 @@ class Planner:
         kernel_obst = np.ones((9, 9), np.uint8)
         dilated_walls = cv2.dilate(walls_mask, kernel_obst, iterations=1)
         
-        # Cria uma "Aura / Zona de Desconforto" larga para forçar o A* pelo meio
-        kernel_soft = np.ones((17, 17), np.uint8)
+        # Cria uma "Aura / Zona de Desconforto" ainda mais larga para forçar o A* bem pelo meio
+        kernel_soft = np.ones((25, 25), np.uint8)
         self.soft_walls = cv2.dilate(walls_mask, kernel_soft, iterations=1)
         
         # Aplica os obstáculos dilatados rígidos ao mapa de paredes
@@ -156,7 +156,7 @@ class Planner:
                 # Penaliza o A* brutalmente se ele andar muito perto da parede (na zona soft_walls)
                 # Assim ele é obrigado a escolher as células no MEIO dos corredores!
                 if hasattr(self, "soft_walls") and self.soft_walls[cell[0], cell[1]] > 0:
-                    step_cost *= 15.0
+                    step_cost *= 25.0
                 
                 # Se for uma célula VERDE (desconhecida/não validada pelo Lidar)...
                 # Multiplicamos o peso absurdamente! (x50). Assim, ele pode pisar nelas

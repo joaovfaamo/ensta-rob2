@@ -106,8 +106,8 @@ def potential_field_control(lidar, current_pose, goal_pose):
     distance = np.linalg.norm(qcurrent - qgoal) #Calculate the euclidean distance between the current position and the goal position
 
     #Implementacao Gradiente Repulsivo 
-    kobstacle = 100
-    safe_distance = 20
+    kobstacle = 30  # Reduzido de 100 para 30 para o "empurrão" ser muito mais suave e não derrapar
+    safe_distance = 25 # Aumentado de 20 para 25 para a repulsão começar mais longe, mas ser gentil
     #Como a ideia é ter varias forças de repulsão, uma para cada obstaculo, precisamos calcular o gradiente de cada um deles e somar as forças de repulsão
     laser_dist = lidar.get_sensor_values()
     laser_angles = np.linspace(-np.pi, np.pi, len(laser_dist))  # Gera um vetor de angulos correspondente a cada leitura do lidar 
@@ -169,8 +169,8 @@ def potential_field_control(lidar, current_pose, goal_pose):
     # Calcula a FORÇA TOTAL (Norma do vetor final)
     force_magnitude = np.linalg.norm(final_direction)
 
-    speed_base = 0.4 * force_magnitude
-    rotation_speed = 0.5 * angle_diff  # Gira proporcionalmente ao ERRO de ângulo
+    speed_base = 0.4 * force_magnitude  # Reduzido de 0.4 para 0.2 para ele andar muito mais devagar por padrão
+    rotation_speed = 0.4 * angle_diff  # Reduzido de 0.5 para 0.3 para giros mais contidos
     
     # --- REDUTOR DE VELOCIDADE ANTI-DERRAPAGEM ---
     # Se o robô estiver sentindo alguma repulsão das paredes (mag > 0.0), a gente corta a 
@@ -183,11 +183,11 @@ def potential_field_control(lidar, current_pose, goal_pose):
             
     # Reduz a velocidade se o erro de angulo for muito grande (pra n ir reto na parede enqnto vira)
     if abs(angle_diff) > np.pi / 4: # Se o erro for maior que 45 graus
-        speed_base = 0.1 # Anda bem devagarzinho
+        speed_base = 0.05 # Anda quase parando para girar com segurança
     
     # SATURAÇÃO MÁXIMA/MÍNIMA para o motor do simulador [-1.0, 1.0]
-    speed = float(np.clip(speed_base, 0.0, 1.0)) # Nao deixa dar re (0.0 minimo) e vai no max 1.0
-    rotation_speed = float(np.clip(rotation_speed, -1.0, 1.0))
+    speed = float(np.clip(speed_base, 0.0, 0.7)) # Cap de velocidade máxima travado em 0.4 (antes era 1.0) para não patinar
+    rotation_speed = float(np.clip(rotation_speed, -0.5, 0.5)) # Cap do limite de giro seguro
     print(f"Alvo(Mundo): {angle_force:.2f}, Robô: {robot_theta:.2f}, Erro(Giro): {angle_diff:.2f}, distance: {distance:.2f}")
 
     # Para modificar o desempenho do sistema, só devemos modificar os Ks (kgoal e kobstacle)
